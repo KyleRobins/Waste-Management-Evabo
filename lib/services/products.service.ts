@@ -1,34 +1,58 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import { Database } from "@/lib/database.types";
+import { Product, ProductWithCustomer } from "@/lib/types/products";
 
 const supabase = createClient();
 
-type Product = Database["public"]["Tables"]["products"]["Insert"];
-
-export const createProduct = async (product: Product) => {
+export async function getProducts(): Promise<ProductWithCustomer[]> {
   const { data, error } = await supabase
     .from("products")
-    .insert(product)
+    .select(
+      `
+      *,
+      customer:customers(id, name, email)
+    `
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data as ProductWithCustomer[];
+}
+
+export async function getProductById(id: string): Promise<ProductWithCustomer> {
+  const { data, error } = await supabase
+    .from("products")
+    .select(
+      `
+      *,
+      customer:customers(id, name, email)
+    `
+    )
+    .eq("id", id)
+    .single();
+
+  if (error) throw error;
+  return data as ProductWithCustomer;
+}
+
+export async function createProduct(
+  product: Omit<Product, "id" | "created_at" | "updated_at">
+): Promise<Product> {
+  const { data, error } = await supabase
+    .from("products")
+    .insert([product])
     .select()
     .single();
 
   if (error) throw error;
-  return data;
-};
+  return data as Product;
+}
 
-export const getProducts = async () => {
-  const { data, error } = await supabase
-    .from("products")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) throw error;
-  return data;
-};
-
-export const updateProduct = async (id: string, updates: Partial<Product>) => {
+export async function updateProduct(
+  id: string,
+  updates: Partial<Product>
+): Promise<Product> {
   const { data, error } = await supabase
     .from("products")
     .update(updates)
@@ -37,14 +61,24 @@ export const updateProduct = async (id: string, updates: Partial<Product>) => {
     .single();
 
   if (error) throw error;
-  return data;
-};
+  return data as Product;
+}
 
-export const deleteProduct = async (id: string) => {
-  const { error } = await supabase
-    .from("products")
-    .delete()
-    .eq("id", id);
+export async function deleteProduct(id: string): Promise<void> {
+  const { error } = await supabase.from("products").delete().eq("id", id);
 
   if (error) throw error;
-};
+}
+
+export async function getProductsByCustomerId(
+  customerId: string
+): Promise<Product[]> {
+  const { data, error } = await supabase
+    .from("products")
+    .select("*")
+    .eq("customer_id", customerId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data as Product[];
+}

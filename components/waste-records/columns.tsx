@@ -19,9 +19,13 @@ export type WasteRecord = {
   date: string;
   type: string;
   quantity: string;
-  supplier: {
-    name: string;
+  customer: {
     id: string;
+    name: string;
+    type: string;
+    contact_person: string;
+    email: string;
+    location: string;
   };
   location: string;
   status: "pending" | "completed" | "requires_approval";
@@ -34,40 +38,56 @@ export const columns: ColumnDef<WasteRecord>[] = [
     cell: ({ row }) => format(new Date(row.getValue("date")), "MMM d, yyyy"),
   },
   {
+    accessorKey: "customer",
+    header: "Customer",
+    cell: ({ row }) => {
+      const customer = row.getValue("customer") as WasteRecord["customer"];
+      return (
+        <div className="flex flex-col">
+          <span className="font-medium">{customer?.name}</span>
+          <span className="text-xs text-muted-foreground">
+            {customer?.contact_person}
+          </span>
+        </div>
+      );
+    },
+  },
+  {
     accessorKey: "type",
     header: "Waste Type",
+    cell: ({ row }) => {
+      const type = row.getValue("type") as string;
+      return <Badge variant="outline">{type}</Badge>;
+    },
   },
   {
     accessorKey: "quantity",
     header: "Quantity",
-  },
-  {
-    accessorKey: "supplier",
-    header: "Supplier",
     cell: ({ row }) => {
-      const supplier = row.getValue("supplier") as { name: string };
-      return supplier?.name || "N/A";
+      const quantity = parseFloat(row.getValue("quantity"));
+      return `${quantity.toFixed(2)} kg`;
     },
   },
   {
     accessorKey: "location",
-    header: "Location",
+    header: "Collection Location",
   },
   {
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
-      const status = row.getValue("status") as string;
+      const status = row.getValue("status") as
+        | "pending"
+        | "completed"
+        | "requires_approval";
+      const statusVariants = {
+        completed: "default",
+        requires_approval: "destructive",
+        pending: "secondary",
+      } as const;
+
       return (
-        <Badge 
-          variant={
-            status === "completed" 
-              ? "default" 
-              : status === "requires_approval"
-              ? "destructive"
-              : "secondary"
-          }
-        >
+        <Badge variant={statusVariants[status]}>
           {status.replace("_", " ")}
         </Badge>
       );

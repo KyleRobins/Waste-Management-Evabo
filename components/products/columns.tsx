@@ -2,9 +2,8 @@
 
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import { MoreHorizontal, Pencil, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MoreHorizontal, Pencil, Trash } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,71 +12,66 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Product } from "@/lib/types/products";
+import { format } from "date-fns";
 
-export type Product = {
-  id: string;
-  name: string;
-  category: string;
-  price: string;
-  stock: string;
-  sourceType: string;
-  processDate: string;
-  status: "in_stock" | "low_stock" | "out_of_stock";
-};
+interface ColumnsProps {
+  onEdit: (product: Product) => void;
+  onDelete: (id: string) => void;
+}
 
-export const columns: ColumnDef<Product>[] = [
+export const columns = ({
+  onEdit,
+  onDelete,
+}: ColumnsProps): ColumnDef<Product>[] => [
   {
     accessorKey: "name",
-    header: "Product Name",
+    header: "Name",
   },
   {
-    accessorKey: "category",
-    header: "Category",
+    accessorKey: "description",
+    header: "Description",
+    cell: ({ row }) => {
+      const description = row.getValue("description") as string;
+      return description || "No description";
+    },
   },
   {
     accessorKey: "price",
     header: "Price",
-  },
-  {
-    accessorKey: "stock",
-    header: "Stock",
-  },
-  {
-    accessorKey: "sourceType",
-    header: "Source Type",
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
     cell: ({ row }) => {
-      const status = row.getValue("status") as string;
+      const price = parseFloat(row.getValue("price"));
+      return new Intl.NumberFormat("en-KE", {
+        style: "currency",
+        currency: "KES",
+      }).format(price);
+    },
+  },
+  {
+    accessorKey: "quantity",
+    header: "Quantity",
+  },
+  {
+    accessorKey: "customer",
+    header: "Customer",
+    cell: ({ row }) => {
+      const customer = row.original.customer;
       return (
-        <Badge 
-          variant={
-            status === "in_stock" 
-              ? "default" 
-              : status === "low_stock"
-              ? "secondary"
-              : "destructive"
-          }
-        >
-          {status.replace("_", " ")}
-        </Badge>
+        <div className="flex flex-col">
+          <span className="font-medium">{customer?.name}</span>
+          <span className="text-xs text-muted-foreground">
+            {customer?.email}
+          </span>
+        </div>
       );
     },
   },
   {
-    accessorKey: "processDate",
-    header: "Process Date",
+    accessorKey: "created_at",
+    header: "Created At",
     cell: ({ row }) => {
-      const date = row.getValue("processDate") as string;
-      if (!date) return "N/A";
-      
-      try {
-        return format(new Date(date), "MMM d, yyyy");
-      } catch (error) {
-        return "Invalid date";
-      }
+      const date = row.getValue("created_at") as string;
+      return format(new Date(date), "MMM d, yyyy");
     },
   },
   {
@@ -96,11 +90,14 @@ export const columns: ColumnDef<Product>[] = [
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Actions</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onEdit(product)}>
               <Pencil className="mr-2 h-4 w-4" />
               Edit
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-red-600">
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => onDelete(product.id)}
+            >
               <Trash className="mr-2 h-4 w-4" />
               Delete
             </DropdownMenuItem>

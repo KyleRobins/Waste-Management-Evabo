@@ -7,10 +7,33 @@ const supabase = createClient();
 
 type WasteRecord = Database["public"]["Tables"]["waste_records"]["Insert"];
 
-export const createWasteRecord = async (record: WasteRecord) => {
+interface Coordinates {
+  lat: number;
+  lng: number;
+}
+
+export interface CreateWasteRecordInput {
+  date: string;
+  type: string;
+  quantity: string;
+  customer_id: string;
+  location: string;
+  coordinates: Coordinates;
+  status?: "pending" | "completed" | "requires_approval";
+}
+
+export const createWasteRecord = async (input: CreateWasteRecordInput) => {
   const { data, error } = await supabase
     .from("waste_records")
-    .insert(record)
+    .insert({
+      date: input.date,
+      type: input.type,
+      quantity: input.quantity,
+      customer_id: input.customer_id,
+      location: input.location,
+      coordinates: input.coordinates,
+      status: input.status || "pending",
+    })
     .select()
     .single();
 
@@ -21,17 +44,29 @@ export const createWasteRecord = async (record: WasteRecord) => {
 export const getWasteRecords = async () => {
   const { data, error } = await supabase
     .from("waste_records")
-    .select(`
+    .select(
+      `
       *,
-      supplier:suppliers(name)
-    `)
+      customer:customers(
+        id,
+        name,
+        type,
+        contact_person,
+        email,
+        location
+      )
+    `
+    )
     .order("created_at", { ascending: false });
 
   if (error) throw error;
   return data;
 };
 
-export const updateWasteRecord = async (id: string, updates: Partial<WasteRecord>) => {
+export const updateWasteRecord = async (
+  id: string,
+  updates: Partial<CreateWasteRecordInput>
+) => {
   const { data, error } = await supabase
     .from("waste_records")
     .update(updates)
@@ -44,10 +79,7 @@ export const updateWasteRecord = async (id: string, updates: Partial<WasteRecord
 };
 
 export const deleteWasteRecord = async (id: string) => {
-  const { error } = await supabase
-    .from("waste_records")
-    .delete()
-    .eq("id", id);
+  const { error } = await supabase.from("waste_records").delete().eq("id", id);
 
   if (error) throw error;
 };

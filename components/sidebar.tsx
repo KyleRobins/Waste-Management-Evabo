@@ -43,11 +43,6 @@ const routes = [
     href: "/waste-records",
   },
   {
-    label: "Suppliers",
-    icon: Factory,
-    href: "/suppliers",
-  },
-  {
     label: "Customers",
     icon: Handshake,
     href: "/customers",

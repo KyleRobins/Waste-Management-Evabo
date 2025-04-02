@@ -40,7 +40,7 @@ import {
   deleteWasteRecord,
   updateWasteRecord,
 } from "@/lib/services/waste-records.service";
-import { getSuppliers } from "@/lib/services/suppliers.service";
+import { getCustomers } from "@/lib/services/customers.service";
 import { useLoadScript } from "@react-google-maps/api";
 import usePlacesAutocomplete, {
   getGeocode,
@@ -64,13 +64,13 @@ const formSchema = z.object({
     required_error: "Please select a waste type",
   }),
   quantity: z.string().min(1, "Quantity is required"),
-  supplier_id: z.string().min(1, "Supplier is required"),
+  customer_id: z.string().min(1, "Customer is required"),
   location: z.string().min(1, "Location is required"),
 });
 
 export default function WasteRecordsPage() {
   const [records, setRecords] = useState([]);
-  const [suppliers, setSuppliers] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const { toast } = useToast();
@@ -81,7 +81,7 @@ export default function WasteRecordsPage() {
       date: new Date().toISOString().split("T")[0],
       type: undefined,
       quantity: "",
-      supplier_id: "",
+      customer_id: "",
       location: "",
     },
   });
@@ -100,12 +100,12 @@ export default function WasteRecordsPage() {
 
   const loadData = async () => {
     try {
-      const [recordsData, suppliersData] = await Promise.all([
+      const [recordsData, customersData] = await Promise.all([
         getWasteRecords(),
-        getSuppliers(),
+        getCustomers(),
       ]);
       setRecords(recordsData);
-      setSuppliers(suppliersData);
+      setCustomers(customersData);
       setLoading(false);
     } catch (error: any) {
       toast({
@@ -271,11 +271,11 @@ export default function WasteRecordsPage() {
         </div>
 
         {status === "OK" && (
-          <ul className="absolute z-10 w-full bg-white border rounded-md mt-1 shadow-lg max-h-60 overflow-auto">
+          <ul className="absolute z-10 w-full bg-background border rounded-md mt-1 shadow-lg max-h-60 overflow-auto">
             {data.map(({ place_id, description }) => (
               <li
                 key={place_id}
-                className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                className="px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer"
                 onClick={async () => {
                   setValue(description, false);
                   clearSuggestions();
@@ -300,44 +300,25 @@ export default function WasteRecordsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Waste Records</h1>
-          <p className="text-muted-foreground">
-            Manage and track waste collection records
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <div className="container mx-auto py-10">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold">Waste Records</h1>
+        <div className="flex items-center gap-4">
           <ImportExportButtons
-            type="waste-records"
             data={records}
             onImport={handleImport}
+            filename="waste_records"
           />
-          <Dialog
-            open={open}
-            onOpenChange={(isOpen) => {
-              setOpen(isOpen);
-              if (!isOpen) {
-                form.reset({
-                  date: new Date().toISOString().split("T")[0],
-                  type: undefined,
-                  quantity: "",
-                  supplier_id: "",
-                  location: "",
-                });
-              }
-            }}
-          >
+          <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
                 Add Record
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[425px]">
+            <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add New Waste Record</DialogTitle>
+                <DialogTitle>Create New Waste Record</DialogTitle>
               </DialogHeader>
               <Form {...form}>
                 <form
@@ -365,7 +346,7 @@ export default function WasteRecordsPage() {
                         <FormLabel>Waste Type</FormLabel>
                         <Select
                           onValueChange={field.onChange}
-                          value={field.value}
+                          defaultValue={field.value}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -391,7 +372,7 @@ export default function WasteRecordsPage() {
                       <FormItem>
                         <FormLabel>Quantity (kg)</FormLabel>
                         <FormControl>
-                          <Input type="number" {...field} />
+                          <Input type="number" step="0.01" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -399,23 +380,23 @@ export default function WasteRecordsPage() {
                   />
                   <FormField
                     control={form.control}
-                    name="supplier_id"
+                    name="customer_id"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Supplier</FormLabel>
+                        <FormLabel>Customer</FormLabel>
                         <Select
                           onValueChange={field.onChange}
-                          value={field.value}
+                          defaultValue={field.value}
                         >
                           <FormControl>
                             <SelectTrigger>
-                              <SelectValue placeholder="Select supplier" />
+                              <SelectValue placeholder="Select customer" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {suppliers.map((supplier: any) => (
-                              <SelectItem key={supplier.id} value={supplier.id}>
-                                {supplier.name}
+                            {customers.map((customer: any) => (
+                              <SelectItem key={customer.id} value={customer.id}>
+                                {customer.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -437,16 +418,9 @@ export default function WasteRecordsPage() {
                       </FormItem>
                     )}
                   />
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      type="button"
-                      onClick={() => setOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit">Submit</Button>
-                  </div>
+                  <Button type="submit" className="w-full">
+                    Create Record
+                  </Button>
                 </form>
               </Form>
             </DialogContent>

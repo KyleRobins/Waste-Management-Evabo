@@ -81,13 +81,13 @@ export const createColumns = (
     header: "Status",
     cell: ({ row }) => {
       const status = row.getValue("status") as "active" | "inactive";
+      const statusVariants = {
+        active: "default",
+        inactive: "destructive",
+      } as const;
+
       return (
-        <Badge
-          className={cn(
-            "capitalize",
-            status === "active" ? "bg-green-500" : "bg-red-500"
-          )}
-        >
+        <Badge variant={statusVariants[status]} className="capitalize">
           {status}
         </Badge>
       );

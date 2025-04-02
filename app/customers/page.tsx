@@ -239,11 +239,11 @@ export default function CustomersPage() {
           )}
         </div>
         {status === "OK" && (
-          <ul className="absolute z-10 w-full bg-white border rounded-md mt-1 shadow-lg max-h-60 overflow-auto">
+          <ul className="absolute z-10 w-full bg-background border rounded-md mt-1 shadow-lg max-h-60 overflow-auto">
             {data.map(({ place_id, description }) => (
               <li
                 key={place_id}
-                className="px-4 py-2 hover:bg-gray-100 cursor-pointer"
+                className="px-4 py-2 hover:bg-accent hover:text-accent-foreground cursor-pointer"
                 onClick={() => {
                   setValue(description, false);
                   clearSuggestions();
