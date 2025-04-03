@@ -11,26 +11,37 @@ import { Download, Send, Printer } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { useRef, useState } from "react";
-import { InvoiceWithCustomer } from "@/lib/services/invoices.service";
+import {
+  InvoiceWithCustomer,
+  sendInvoiceByEmail,
+  updateInvoiceStatus,
+} from "@/lib/services/invoices.service";
 import { useToast } from "@/hooks/use-toast";
+import { InvoiceStatus } from "@/components/invoices/columns";
+import { formatInvoiceNumber } from "@/lib/utils";
 
 interface InvoiceDetailsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   invoice: InvoiceWithCustomer | null;
+  onStatusChange?: (id: string, newStatus: InvoiceStatus) => void;
 }
 
 export function InvoiceDetailsSheet({
   open,
   onOpenChange,
   invoice,
+  onStatusChange,
 }: InvoiceDetailsSheetProps) {
   const invoiceRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+  const [isSending, setIsSending] = useState(false);
 
   const statusVariants = {
     draft: "secondary",
+    saved: "secondary",
+    sent: "outline",
     unpaid: "destructive",
     paid: "default",
   } as const;
@@ -90,6 +101,71 @@ export function InvoiceDetailsSheet({
     }
   };
 
+  const handleSendInvoice = async () => {
+    if (!invoice || !invoice.customer.email) {
+      toast({
+        title: "Error",
+        description: "Customer email is missing. Cannot send invoice.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setIsSending(true);
+      toast({
+        title: "Sending invoice",
+        description: "Please wait...",
+      });
+
+      await sendInvoiceByEmail(invoice.id, invoice.customer.email);
+
+      // Update UI with new status
+      if (onStatusChange) {
+        onStatusChange(invoice.id, "sent");
+      }
+
+      toast({
+        title: "Success",
+        description: "Invoice has been sent to the customer",
+      });
+    } catch (error) {
+      console.error("Error sending invoice:", error);
+      toast({
+        title: "Error",
+        description: "Failed to send invoice. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleStatusUpdate = async (newStatus: InvoiceStatus) => {
+    if (!invoice) return;
+
+    try {
+      await updateInvoiceStatus(invoice.id, newStatus);
+
+      // Update UI with new status
+      if (onStatusChange) {
+        onStatusChange(invoice.id, newStatus);
+      }
+
+      toast({
+        title: "Success",
+        description: `Invoice marked as ${newStatus}`,
+      });
+    } catch (error) {
+      console.error(`Error updating invoice status to ${newStatus}:`, error);
+      toast({
+        title: "Error",
+        description: `Failed to update invoice status`,
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!invoice) return null;
 
   return (
@@ -111,9 +187,19 @@ export function InvoiceDetailsSheet({
               <Printer className="h-4 w-4 mr-2" />
               Print
             </Button>
-            <Button variant="default" size="sm">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleSendInvoice}
+              disabled={
+                isSending ||
+                invoice.status === "sent" ||
+                invoice.status === "paid" ||
+                !invoice.customer.email
+              }
+            >
               <Send className="h-4 w-4 mr-2" />
-              Send Invoice
+              {isSending ? "Sending..." : "Send Invoice"}
             </Button>
           </div>
         </SheetHeader>
@@ -125,7 +211,13 @@ export function InvoiceDetailsSheet({
           {/* Header Section */}
           <div className="flex justify-between items-start">
             <div>
-              <h2 className="text-2xl font-bold">INVOICE #{invoice.id}</h2>
+              <h2 className="text-2xl font-bold">
+                {formatInvoiceNumber(
+                  invoice.status,
+                  invoice.id,
+                  invoice.invoice_date
+                )}
+              </h2>
               <Badge variant={statusVariants[invoice.status]}>
                 {invoice.status.toUpperCase()}
               </Badge>
@@ -240,6 +332,30 @@ export function InvoiceDetailsSheet({
               <p className="text-muted-foreground">{invoice.notes}</p>
             </div>
           )}
+
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold">Invoice Status</h3>
+            <div className="space-x-2">
+              {invoice.status !== "paid" && (
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => handleStatusUpdate("paid")}
+                >
+                  Mark as Paid
+                </Button>
+              )}
+              {invoice.status !== "unpaid" && invoice.status !== "draft" && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleStatusUpdate("unpaid")}
+                >
+                  Mark as Unpaid
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

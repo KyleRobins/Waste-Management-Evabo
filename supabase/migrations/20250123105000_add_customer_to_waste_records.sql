@@ -45,4 +45,12 @@ DO $$ BEGIN
 END $$;
 
 -- Disable RLS since authentication is disabled
-ALTER TABLE waste_records DISABLE ROW LEVEL SECURITY; 
+ALTER TABLE waste_records DISABLE ROW LEVEL SECURITY;
+
+-- Update invoice status type to include the new status values
+ALTER TABLE invoices 
+DROP CONSTRAINT IF EXISTS invoices_status_check;
+
+ALTER TABLE invoices
+ADD CONSTRAINT invoices_status_check
+CHECK (status IN ('draft', 'saved', 'sent', 'unpaid', 'paid')); 

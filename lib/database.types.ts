@@ -116,7 +116,7 @@ export interface Database {
           id: string;
           customer_id: string;
           amount: number;
-          status: "draft" | "unpaid" | "paid";
+          status: "draft" | "saved" | "sent" | "unpaid" | "paid";
           invoice_date: string;
           due_date: string;
           collection_date: string;
@@ -130,7 +130,7 @@ export interface Database {
           id?: string;
           customer_id: string;
           amount: number;
-          status?: "draft" | "unpaid" | "paid";
+          status?: "draft" | "saved" | "sent" | "unpaid" | "paid";
           invoice_date?: string;
           due_date: string;
           collection_date: string;
@@ -144,7 +144,7 @@ export interface Database {
           id?: string;
           customer_id?: string;
           amount?: number;
-          status?: "draft" | "unpaid" | "paid";
+          status?: "draft" | "saved" | "sent" | "unpaid" | "paid";
           invoice_date?: string;
           due_date?: string;
           collection_date?: string;

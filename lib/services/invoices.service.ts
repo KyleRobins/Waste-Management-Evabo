@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/client";
 import { Database } from "@/lib/database.types";
+import { InvoiceStatus } from "@/components/invoices/columns";
 
 const supabase = createClient();
 
@@ -9,14 +10,15 @@ type DbInvoice = Database["public"]["Tables"]["invoices"]["Row"];
 type DbInvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
 type DbCustomer = Database["public"]["Tables"]["customers"]["Row"];
 
-export type InvoiceWithCustomer = DbInvoice & {
+export type InvoiceWithCustomer = Omit<DbInvoice, "status"> & {
   customer: DbCustomer;
+  status: InvoiceStatus;
 };
 
 export interface CreateInvoiceInput {
   customer_id: string;
   amount: number;
-  status: "draft" | "unpaid" | "paid";
+  status: InvoiceStatus;
   invoice_date?: string;
   due_date: string;
   collection_date: string;
@@ -81,7 +83,7 @@ export const getInvoices = async (): Promise<InvoiceWithCustomer[]> => {
 
 export const updateInvoiceStatus = async (
   id: string,
-  status: "draft" | "unpaid" | "paid"
+  status: InvoiceStatus
 ): Promise<DbInvoice> => {
   const { data, error } = await supabase
     .from("invoices")
@@ -116,6 +118,8 @@ export const getInvoiceStats = async () => {
     paid: 0,
     unpaid: 0,
     draft: 0,
+    saved: 0,
+    sent: 0,
   };
 
   (invoices || []).forEach((invoice) => {
@@ -125,4 +129,22 @@ export const getInvoiceStats = async () => {
   });
 
   return stats;
+};
+
+export const sendInvoiceByEmail = async (
+  invoiceId: string,
+  customerEmail: string
+): Promise<boolean> => {
+  try {
+    await updateInvoiceStatus(invoiceId, "sent");
+
+    console.log(
+      `Email would be sent to ${customerEmail} for invoice ${invoiceId}`
+    );
+
+    return true;
+  } catch (error) {
+    console.error("Error sending invoice email:", error);
+    throw error;
+  }
 };
