@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -8,381 +7,691 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DatePickerWithRange } from "@/components/ui/date-range-picker";
+import { PageSkeleton } from "@/components/shared/page-skeleton";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { useReportData } from "@/lib/hooks/use-report-data";
 import {
   BarChart,
   Bar,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
   Cell,
 } from "recharts";
-import { Download, FileDown } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { format, subDays, parseISO } from "date-fns";
+import {
+  ArrowDown,
+  ArrowUp,
+  Calendar,
+  DollarSign,
+  Users,
+  Recycle,
+  BadgeDollarSign,
+  ArchiveIcon,
+  Filter,
+} from "lucide-react";
+import { DateRange } from "react-day-picker";
 
-const COLORS = ['#10B981', '#3B82F6', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+// Chart colors
+const COLORS = [
+  "#0088FE",
+  "#00C49F",
+  "#FFBB28",
+  "#FF8042",
+  "#8884d8",
+  "#82ca9d",
+];
 
 export default function ReportsPage() {
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [reportType, setReportType] = useState("waste");
-  const [loading, setLoading] = useState(false);
-  const [wasteCollectionData, setWasteCollectionData] = useState([]);
-  const [wasteDistributionData, setWasteDistributionData] = useState([]);
-  const [supplierPerformanceData, setSupplierPerformanceData] = useState([]);
-  const [environmentalData, setEnvironmentalData] = useState([]);
-  const [financialData, setFinancialData] = useState([]);
-  const { toast } = useToast();
-  const supabase = createClient();
+  const {
+    customerMetrics,
+    wasteMetrics,
+    financialMetrics,
+    transactions,
+    dateRange,
+    loading,
+    activeTab,
+    setDateRange,
+    setActiveTab,
+    refreshData,
+  } = useReportData();
 
-  useEffect(() => {
-    fetchChartData();
-  }, []);
+  if (loading) {
+    return <PageSkeleton />;
+  }
 
-  const fetchChartData = async () => {
-    try {
-      // Set default date range to last 30 days
-      const endDate = new Date();
-      const startDate = subDays(endDate, 30);
+  // Format large numbers with commas
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat().format(Math.round(num * 100) / 100);
+  };
 
-      // Fetch waste collection trends
-      const { data: wasteData } = await supabase
-        .from('waste_records')
-        .select('date, quantity, type')
-        .gte('date', startDate.toISOString())
-        .order('date', { ascending: true });
-
-      if (wasteData) {
-        // Process waste collection trends
-        const collectionTrends = wasteData.map(record => ({
-          date: format(parseISO(record.date), 'MMM d'),
-          quantity: parseFloat(record.quantity)
-        }));
-        setWasteCollectionData(collectionTrends);
-
-        // Process waste distribution
-        const distribution = wasteData.reduce((acc, record) => {
-          acc[record.type] = (acc[record.type] || 0) + parseFloat(record.quantity);
-          return acc;
-        }, {});
-        
-        const distributionData = Object.entries(distribution).map(([name, value]) => ({
-          name,
-          value
-        }));
-        setWasteDistributionData(distributionData);
-      }
-
-      // Fetch supplier performance
-      const { data: supplierData } = await supabase
-        .from('waste_records')
-        .select(`
-          supplier:suppliers(name),
-          quantity
-        `)
-        .gte('date', startDate.toISOString());
-
-      if (supplierData) {
-        const supplierEfficiency = supplierData.reduce((acc, record) => {
-          const supplierName = record.supplier?.name || 'Unknown';
-          acc[supplierName] = (acc[supplierName] || 0) + parseFloat(record.quantity);
-          return acc;
-        }, {});
-
-        const performanceData = Object.entries(supplierEfficiency).map(([name, efficiency]) => ({
-          name,
-          efficiency
-        }));
-        setSupplierPerformanceData(performanceData);
-      }
-
-      // Calculate environmental impact (simplified example)
-      const environmentalImpact = wasteData?.map(record => ({
-        date: format(parseISO(record.date), 'MMM d'),
-        reduction: parseFloat(record.quantity) * 0.5 // Assuming 0.5 CO2 reduction per kg
-      })) || [];
-      setEnvironmentalData(environmentalImpact);
-
-      // Fetch financial data
-      const { data: productsData } = await supabase
-        .from('products')
-        .select('price, created_at')
-        .gte('created_at', startDate.toISOString());
-
-      if (productsData) {
-        const financialByMonth = productsData.reduce((acc, product) => {
-          const month = format(parseISO(product.created_at), 'MMM');
-          acc[month] = acc[month] || { revenue: 0, expenses: 0 };
-          acc[month].revenue += parseFloat(product.price);
-          acc[month].expenses += parseFloat(product.price) * 0.4; // Assuming 40% expenses
-          return acc;
-        }, {});
-
-        const financialTrends = Object.entries(financialByMonth).map(([month, data]) => ({
-          month,
-          ...data
-        }));
-        setFinancialData(financialTrends);
-      }
-
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to fetch chart data",
-        variant: "destructive",
+  // Handle date range selection
+  const handleDateRangeChange = (range: DateRange | undefined) => {
+    if (range) {
+      setDateRange({
+        from: range.from,
+        to: range.to || range.from,
       });
     }
   };
 
-  const generateReport = async () => {
-    if (!startDate || !endDate) {
-      toast({
-        title: "Error",
-        description: "Please select both start and end dates",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
-    try {
-      // Fetch data based on report type and date range
-      const { data, error } = await supabase
-        .from(reportType === "waste" ? "waste_records" : "products")
-        .select("*")
-        .gte("created_at", new Date(startDate).toISOString())
-        .lte("created_at", new Date(endDate).toISOString());
-
-      if (error) throw error;
-
-      // Process and download report
-      const csvData = data.map(item => ({
-        ...item,
-        created_at: new Date(item.created_at).toLocaleDateString()
-      }));
-
-      const blob = new Blob([JSON.stringify(csvData, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${reportType}-report-${new Date().toISOString()}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast({
-        title: "Success",
-        description: "Report generated successfully",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to generate report",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
+  // Custom tooltip formatter that safely converts values to numbers
+  const formatTooltipValue = (
+    value: any,
+    prefix: string = "",
+    suffix: string = ""
+  ) => {
+    const numValue = typeof value === "string" ? parseFloat(value) : value;
+    if (isNaN(numValue)) return `${prefix}0${suffix}`;
+    return `${prefix}${formatNumber(numValue)}${suffix}`;
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Reports</h1>
-        <p className="text-muted-foreground">
-          Generate and analyze waste management reports
-        </p>
+    <div className="flex flex-col gap-4 p-4 md:p-8 dark">
+      {/* Header section */}
+      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+            Reports
+          </h1>
+          <p className="text-sm md:text-base text-muted-foreground">
+            Analytics and insights for your waste management operations
+          </p>
+        </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {/* Dark filter bar */}
+      <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center p-4 bg-black rounded-lg border border-neutral-800">
+        <DatePickerWithRange
+          className="flex-1 sm:max-w-xs"
+          onSelect={handleDateRangeChange}
+        />
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button
+            onClick={refreshData}
+            className="flex-1 sm:flex-none flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+          >
+            <Calendar className="h-4 w-4" /> Update
+          </Button>
+          <Button
+            variant="outline"
+            className="flex-1 sm:flex-none flex items-center gap-1.5 border-neutral-700 bg-transparent hover:bg-neutral-800 hover:text-white"
+          >
+            <Filter className="h-4 w-4" /> Filters
+          </Button>
+        </div>
+      </div>
+
+      {/* Summary Cards */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Customer Count */}
         <Card>
-          <CardHeader>
-            <CardTitle>Waste Collection Trends</CardTitle>
-            <CardDescription>Daily collection amounts</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total Customers
+            </CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={wasteCollectionData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="quantity" stroke="#10B981" name="Quantity (kg)" />
-              </LineChart>
-            </ResponsiveContainer>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {formatNumber(customerMetrics.totalCustomers)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Active customers in your database
+            </p>
           </CardContent>
         </Card>
 
+        {/* Total Waste */}
         <Card>
-          <CardHeader>
-            <CardTitle>Waste Distribution</CardTitle>
-            <CardDescription>By type</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total Waste Collected
+            </CardTitle>
+            <Recycle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={wasteDistributionData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label
-                >
-                  {wasteDistributionData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {formatNumber(wasteMetrics.totalWaste)} kg
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Total waste processed in selected period
+            </p>
           </CardContent>
         </Card>
 
+        {/* Revenue */}
         <Card>
-          <CardHeader>
-            <CardTitle>Supplier Performance</CardTitle>
-            <CardDescription>Collection efficiency</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={supplierPerformanceData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="efficiency" fill="#3B82F6" name="Collection Amount (kg)" />
-              </BarChart>
-            </ResponsiveContainer>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${formatNumber(financialMetrics.totalRevenue)}
+            </div>
+            <div className="flex items-center gap-1 pt-1">
+              <ArrowUp className="h-4 w-4 text-green-500" />
+              <span className="text-xs text-green-500">
+                +
+                {Math.round(
+                  (financialMetrics.netIncome / financialMetrics.totalRevenue) *
+                    100
+                )}
+                %
+              </span>
+              <span className="text-xs text-muted-foreground ml-1">
+                from previous period
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Unpaid Invoices */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              Unpaid Invoices
+            </CardTitle>
+            <BadgeDollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${formatNumber(financialMetrics.unpaidInvoices.amount)}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {financialMetrics.unpaidInvoices.count} invoices pending payment
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Generate Reports</CardTitle>
-          <CardDescription>
-            Export detailed reports for analysis
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <Select
-                value={reportType}
-                onValueChange={setReportType}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select report type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="waste">Waste Collection Report</SelectItem>
-                  <SelectItem value="products">Recycled Products Report</SelectItem>
-                  <SelectItem value="suppliers">Supplier Performance Report</SelectItem>
-                  <SelectItem value="customers">Customer Activity Report</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex-1">
-              <Input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            <div className="flex-1">
-              <Input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            <Button 
-              onClick={generateReport}
-              disabled={loading}
-              className="w-full md:w-auto"
-            >
-              {loading ? (
-                "Generating..."
-              ) : (
-                <>
-                  <FileDown className="mr-2 h-4 w-4" />
-                  Generate Report
-                </>
-              )}
-            </Button>
+      {/* Tabs with dark styling */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
+        <TabsList className="grid w-full grid-cols-4 p-1 bg-black rounded-lg border border-neutral-800">
+          <TabsTrigger
+            value="overview"
+            className="data-[state=active]:bg-neutral-800 data-[state=active]:text-white rounded-md"
+          >
+            Overview
+          </TabsTrigger>
+          <TabsTrigger
+            value="customers"
+            className="data-[state=active]:bg-neutral-800 data-[state=active]:text-white rounded-md"
+          >
+            Customers
+          </TabsTrigger>
+          <TabsTrigger
+            value="waste"
+            className="data-[state=active]:bg-neutral-800 data-[state=active]:text-white rounded-md"
+          >
+            Waste
+          </TabsTrigger>
+          <TabsTrigger
+            value="financial"
+            className="data-[state=active]:bg-neutral-800 data-[state=active]:text-white rounded-md"
+          >
+            Financial
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Revenue vs Expenses */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Revenue vs Expenses</CardTitle>
+                <CardDescription>Monthly financial performance</CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={financialMetrics.revenueByMonth}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value: any) => [
+                        formatTooltipValue(value, "$"),
+                        "",
+                      ]}
+                    />
+                    <Legend />
+                    <Bar dataKey="revenue" name="Revenue" fill="#8884d8" />
+                    <Bar dataKey="expenses" name="Expenses" fill="#82ca9d" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Waste Collection Trend */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Waste Collection Trend</CardTitle>
+                <CardDescription>
+                  Monthly collection volume (kg)
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart
+                    data={wasteMetrics.wasteByMonth}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value: any) => [
+                        formatTooltipValue(value, "", " kg"),
+                        "",
+                      ]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="quantity"
+                      stroke="#8884d8"
+                      fill="#8884d8"
+                      fillOpacity={0.3}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Environmental Impact</CardTitle>
-            <CardDescription>Carbon footprint reduction</CardDescription>
-          </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={environmentalData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="reduction" 
-                  stroke="#10B981" 
-                  name="CO2 Reduction (kg)" 
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+          {/* Recent Transactions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Transactions</CardTitle>
+              <CardDescription>Latest activity in your account</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-2 font-medium text-sm">
+                        Date
+                      </th>
+                      <th className="text-left py-2 font-medium text-sm">
+                        Description
+                      </th>
+                      <th className="text-left py-2 font-medium text-sm">
+                        Category
+                      </th>
+                      <th className="text-right py-2 font-medium text-sm">
+                        Amount
+                      </th>
+                      <th className="text-right py-2 font-medium text-sm">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.slice(0, 7).map((transaction) => (
+                      <tr key={transaction.id} className="border-b">
+                        <td className="py-2 text-sm">{transaction.date}</td>
+                        <td className="py-2 text-sm">
+                          {transaction.description}
+                        </td>
+                        <td className="py-2 text-sm capitalize">
+                          {transaction.category}
+                        </td>
+                        <td className="py-2 text-sm text-right">
+                          ${formatNumber(transaction.amount)}
+                        </td>
+                        <td className="py-2 text-sm text-right">
+                          <span
+                            className={`inline-block px-2 py-1 rounded-full text-xs capitalize ${
+                              transaction.status === "paid" ||
+                              transaction.status === "completed"
+                                ? "bg-green-100 text-green-800"
+                                : transaction.status === "pending"
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-red-100 text-red-800"
+                            }`}
+                          >
+                            {transaction.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 text-center">
+                <Button variant="outline" className="w-full md:w-auto">
+                  View All Transactions
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Financial Overview</CardTitle>
-            <CardDescription>Revenue from recycled products</CardDescription>
-          </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={financialData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="revenue" fill="#10B981" name="Revenue" />
-                <Bar dataKey="expenses" fill="#EF4444" name="Expenses" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
+        {/* Customers Tab */}
+        <TabsContent value="customers" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Customer Growth */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Customer Growth</CardTitle>
+                <CardDescription>
+                  Cumulative customers over time
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={customerMetrics.customerGrowth}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value: any) => [
+                        formatTooltipValue(value),
+                        "Customers",
+                      ]}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="count"
+                      stroke="#00C49F"
+                      activeDot={{ r: 8 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Customer Types */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Customer Types</CardTitle>
+                <CardDescription>
+                  Distribution by customer category
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={customerMetrics.customersByType}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, percent }) =>
+                        `${name} ${(percent * 100).toFixed(0)}%`
+                      }
+                    >
+                      {customerMetrics.customersByType.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any) => [
+                        formatTooltipValue(value),
+                        "Customers",
+                      ]}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Customer Management Link */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer Management</CardTitle>
+              <CardDescription>
+                Manage and analyze your customer base
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <Button className="flex items-center gap-2">
+                  <Users className="h-4 w-4" /> View All Customers
+                </Button>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <ArrowDown className="h-4 w-4" /> Export Customer Data
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Waste Tab */}
+        <TabsContent value="waste" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Waste Collection by Type */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Waste Distribution</CardTitle>
+                <CardDescription>Categorization by waste type</CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={wasteMetrics.wasteByType}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, percent }) =>
+                        `${name} ${(percent * 100).toFixed(0)}%`
+                      }
+                    >
+                      {wasteMetrics.wasteByType.map((entry, index) => (
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value: any) => [
+                        formatTooltipValue(value, "", " kg"),
+                        "",
+                      ]}
+                    />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Waste Collection Trend */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Collection Volume</CardTitle>
+                <CardDescription>Monthly waste collection (kg)</CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={wasteMetrics.wasteByMonth}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value: any) => [
+                        formatTooltipValue(value, "", " kg"),
+                        "",
+                      ]}
+                    />
+                    <Bar dataKey="quantity" fill="#00C49F" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Waste Records Link */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Waste Records</CardTitle>
+              <CardDescription>
+                Detailed waste processing records
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col gap-4 sm:flex-row">
+                <Button className="flex items-center gap-2">
+                  <ArchiveIcon className="h-4 w-4" /> View All Records
+                </Button>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <ArrowDown className="h-4 w-4" /> Export Waste Data
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Financial Tab */}
+        <TabsContent value="financial" className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Revenue Breakdown */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Revenue vs Expenses</CardTitle>
+                <CardDescription>Monthly financial performance</CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={financialMetrics.revenueByMonth}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value: any) => [
+                        formatTooltipValue(value, "$"),
+                        "",
+                      ]}
+                    />
+                    <Legend />
+                    <Bar dataKey="revenue" name="Revenue" fill="#8884d8" />
+                    <Bar dataKey="expenses" name="Expenses" fill="#82ca9d" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Net Income */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Net Income</CardTitle>
+                <CardDescription>Monthly profit after expenses</CardDescription>
+              </CardHeader>
+              <CardContent className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={financialMetrics.revenueByMonth.map((item) => ({
+                      month: item.month,
+                      netIncome: item.revenue - item.expenses,
+                    }))}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 30 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="month" />
+                    <YAxis />
+                    <Tooltip
+                      formatter={(value: any) => [
+                        formatTooltipValue(value, "$"),
+                        "Net Income",
+                      ]}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="netIncome"
+                      stroke="#FF8042"
+                      strokeWidth={2}
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 8 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Financial Summary Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Financial Summary</CardTitle>
+              <CardDescription>Overall financial performance</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">
+                    Total Revenue
+                  </span>
+                  <span className="text-2xl font-bold">
+                    ${formatNumber(financialMetrics.totalRevenue)}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">
+                    Total Expenses
+                  </span>
+                  <span className="text-2xl font-bold">
+                    ${formatNumber(financialMetrics.totalExpenses)}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm text-muted-foreground">
+                    Net Income
+                  </span>
+                  <span className="text-2xl font-bold">
+                    ${formatNumber(financialMetrics.netIncome)}
+                  </span>
+                </div>
+              </div>
+              <div className="mt-4 pt-4 border-t">
+                <div className="flex flex-col gap-4 sm:flex-row">
+                  <Button className="flex items-center gap-2">
+                    <BadgeDollarSign className="h-4 w-4" /> View Invoices
+                  </Button>
+                  <Button variant="outline" className="flex items-center gap-2">
+                    <ArrowDown className="h-4 w-4" /> Export Financial Data
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

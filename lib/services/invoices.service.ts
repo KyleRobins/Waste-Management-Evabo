@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/client";
 import { Database } from "@/lib/database.types";
 import { InvoiceStatus } from "@/components/invoices/columns";
+import { formatInvoiceNumber } from "@/lib/utils";
 
 const supabase = createClient();
 
@@ -136,12 +137,50 @@ export const sendInvoiceByEmail = async (
   customerEmail: string
 ): Promise<boolean> => {
   try {
-    await updateInvoiceStatus(invoiceId, "sent");
+    const supabase = createClient();
 
-    console.log(
-      `Email would be sent to ${customerEmail} for invoice ${invoiceId}`
+    // Get the invoice details first
+    const { data: invoice, error: invoiceError } = await supabase
+      .from("invoices")
+      .select(
+        `
+        *,
+        customer:customers(*)
+      `
+      )
+      .eq("id", invoiceId)
+      .single();
+
+    if (invoiceError || !invoice) {
+      console.error("Error fetching invoice:", invoiceError);
+      throw new Error("Failed to fetch invoice details");
+    }
+
+    // Generate the formatted invoice number
+    const invoiceNumber = formatInvoiceNumber(
+      invoice.status as InvoiceStatus,
+      invoice.id,
+      invoice.invoice_date
     );
 
+    // Call the Edge Function to send the email
+    const { data, error } = await supabase.functions.invoke("send-invoice", {
+      body: {
+        invoiceId: invoice.id,
+        customerEmail: customerEmail,
+        customerName: invoice.customer.name,
+        invoiceNumber: invoiceNumber,
+        amount: invoice.amount,
+        dueDate: invoice.due_date,
+      },
+    });
+
+    if (error) {
+      console.error("Error calling send-invoice function:", error);
+      throw error;
+    }
+
+    console.log("Email sending response:", data);
     return true;
   } catch (error) {
     console.error("Error sending invoice email:", error);

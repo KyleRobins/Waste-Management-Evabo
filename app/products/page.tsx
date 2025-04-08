@@ -5,100 +5,24 @@ import { PageSkeleton } from "@/components/shared/page-skeleton";
 import { columns } from "@/components/products/columns";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
-import { useState, useEffect } from "react";
-import {
-  getProducts,
-  createProduct,
-  updateProduct,
-  deleteProduct,
-} from "@/lib/services/products.service";
-import { Product } from "@/lib/types/products";
-import { useToast } from "@/hooks/use-toast";
 import { CreateProductDialog } from "@/components/products/create-product-dialog";
 import { EditProductDialog } from "@/components/products/edit-product-dialog";
+import { useProductData } from "@/lib/hooks/use-product-data";
 
 export default function ProductsPage() {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [openCreate, setOpenCreate] = useState(false);
-  const [openEdit, setOpenEdit] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    loadProducts();
-  }, []);
-
-  const loadProducts = async () => {
-    try {
-      const data = await getProducts();
-      setProducts(data);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load products",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreate = async (
-    product: Omit<Product, "id" | "created_at" | "updated_at">
-  ) => {
-    try {
-      await createProduct(product);
-      toast({
-        title: "Success",
-        description: "Product created successfully",
-      });
-      loadProducts();
-      setOpenCreate(false);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create product",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleUpdate = async (id: string, updates: Partial<Product>) => {
-    try {
-      await updateProduct(id, updates);
-      toast({
-        title: "Success",
-        description: "Product updated successfully",
-      });
-      loadProducts();
-      setOpenEdit(false);
-      setSelectedProduct(null);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update product",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    try {
-      await deleteProduct(id);
-      toast({
-        title: "Success",
-        description: "Product deleted successfully",
-      });
-      loadProducts();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete product",
-        variant: "destructive",
-      });
-    }
-  };
+  const {
+    products,
+    loading,
+    selectedProduct,
+    openCreate,
+    openEdit,
+    setOpenCreate,
+    setOpenEdit,
+    handleCreate,
+    handleUpdate,
+    handleDelete,
+    selectProduct,
+  } = useProductData();
 
   if (loading) {
     return <PageSkeleton />;
@@ -123,10 +47,7 @@ export default function ProductsPage() {
 
       <DataTable
         columns={columns({
-          onEdit: (product) => {
-            setSelectedProduct(product);
-            setOpenEdit(true);
-          },
+          onEdit: selectProduct,
           onDelete: handleDelete,
         })}
         data={products}
